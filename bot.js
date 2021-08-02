@@ -111,29 +111,25 @@ function saveData(message) {
 }
 
 function loadData(message) {
-    var normalPath = path.normalize(__dirname + '/users.txt');
-    const userFile = fs.readFileSync(normalPath, 'utf8');
+    const userFile = fs.readFileSync('./users.txt', 'utf8');
     var userData = JSON.parse(userFile);
     for (const obj of userData) {
         users.push(obj);
     }
 
-    normalPath = path.normalize(__dirname + '/matches.txt');
-    const matchesFile = fs.readFileSync(normalPath, 'utf8');
+    const matchesFile = fs.readFileSync('./matches.txt', 'utf8');
     var matchData = JSON.parse(matchesFile);
     for (const obj of matchData) {
         matches.push(obj);
     }
 
-    normalPath = path.normalize(__dirname + '/bets.txt');
-    const betsFile = fs.readFileSync(normalPath, 'utf8');
+    const betsFile = fs.readFileSync('./bets.txt', 'utf8');
     var betsData = JSON.parse(betsFile);
     for (const obj of betsData) {
         bets.push(obj);
     }
 
-    normalPath = path.normalize(__dirname + '/predicts.txt');
-    const predictsFile = fs.readFileSync(normalPath, 'utf8');
+    const predictsFile = fs.readFileSync('./predicts.txt', 'utf8');
     var predictData = JSON.parse(predictsFile);
     for (const obj of predictData) {
         predicts.push(obj);
@@ -314,7 +310,7 @@ function userCommands(message) {
         case "bet":
             addBet(message);
             break;
-        case "predict":
+        case "p":
             addPredict(message);
             break;
         case "info":
@@ -343,7 +339,7 @@ function displayLeaderboard(message) {
     } else if (args[1] == 'predict') {
         lbPredict(message);
     } else {
-        message.reply(`must specify either !lb bet or !lb predict`)
+        message.reply(`must specify either $lb bet or $lb predict`)
     }
 }
 
@@ -378,7 +374,7 @@ function lbMoney(message) {
         ],
         timestamp: new Date(),
         footer: {
-            text: 'To see current leaderboard based on correct predictions, type !lb predict'
+            text: 'To see current leaderboard based on correct predictions, type $lb predict'
         }
     };
 
@@ -417,7 +413,7 @@ function lbPredict(message) {
         ],
         timestamp: new Date(),
         footer: {
-            text: 'To see current leaderboard based on total money, type !lb bet'
+            text: 'To see current leaderboard based on total money, type $lb bet'
         }
     };
 
@@ -486,7 +482,7 @@ function list(message) {
     const exampleEmbed = {
         color: 0x0099ff,
         title: 'Open Matches',
-        description: `To make a bet or prediction, use !bet [MatchID] [1 or 2] [amount to wager] or !predict [MatchID] [1 or 2].`,
+        description: `To make a bet or prediction, use $bet [MatchID] [1 or 2] [amount to wager] or $p [MatchID] [1 or 2].`,
         fields: [
             {
                 name: "Odds",
@@ -554,7 +550,8 @@ function me(message) {
 
         }
     } else {
-        message.reply(`incorrect command usage.  use either !me bet or !me predict`)
+        message.reply(`incorrect command usage.  use either $me bet or $me predict`)
+        return
     }
 
 
@@ -625,7 +622,7 @@ function info(message) {
         ],
         timestamp: new Date(),
         footer: {
-            text: 'To see your current predictions/bets, type !me [predict or bet]'
+            text: 'To see your current predictions/bets, type $me [predict or bet]'
         }
     };
 
@@ -681,42 +678,59 @@ function addBet(message) {
 function addPredict(message) {
     //USAGE: !predict [matchID] [teamToWin]
     //helper for args
-    var args = message.content.substring(prefix.length).replace(/  +/g, ' ').split(" ");
+    var args = message.content.substring(prefix.length).replace(/  +/g, ' ').split(",");
 
-    //checking args are valid
     if (!switchOpen) {
         message.reply(`betting is currently closed`)
         return
     }
     if (!users.some(e => e.id == message.author.id)) {
-        message.reply(`user doesn't exist, please register`)
-        return
-    }
-    if (!matches.some(e => e.id == args[1])) {
-        message.reply(`matchid doesn't exist`)
-        return
-    }
-    var res = parseInt(args[2])
-    if (res < 1 || res > 2 || !Number.isInteger(res)) {
-        message.reply(`you must predict either team one or team two to win`)
+        message.reply(`user doesn't exist, please $register`)
         return
     }
 
+    var response = ''
+    for (const p in args) {
+        args[p] = args[p].replace("p", "");
+        args[p] = args[p].trim();
+        args[p] = args[p].split(" ");
+        response = response + predictHandler(message, args[p])
+    }
+
+    message.reply(response);
+
+}
+
+function predictHandler(message, p) {
+    //p0 is match id, p1 is prediction
+    //matchID doesn't exist
+    if (!matches.some(e => e.id == p[0])) {
+        return `ERROR: MATCHID ${p[0]} DOESNT EXIST. `
+    }
+    //predict isnt 1 or 2
+    var res = parseInt(p[1])
+    if (res < 1 || res > 2 || !Number.isInteger(res)) {
+        return `ERROR: PREDICTION FOR MATCHID ${p[0]} IS INVALID, YOU MUST SELECT 1 OR 2. `
+    }
+
+
     //update prediction if prediction is already made
-    if (predicts.some(e => e.userid == message.author.id && e.mid == args[1])) {
-        var objIndex = predicts.findIndex((e => e.userid == message.author.id && e.mid == args[1]));
-        predicts[objIndex].result = args[2];
-        message.reply(`user has updated prediction`)
-        return
+    if (predicts.some(e => e.userid == message.author.id && e.mid == p[0])) {
+        var objIndex = predicts.findIndex((e => e.userid == message.author.id && e.mid == p[0]));
+        predicts[objIndex].result = p[0];
+        return `success: prediction updated for matchid ${p[0]}. `
     }
 
     //add prediction if prediction is new
-    var newPredict = { "userid": message.author.id, "mid": args[1], "result": args[2] }
+    var newPredict = { "userid": message.author.id, "mid": p[0], "result": p[1] }
     var objIndex = users.findIndex((e => e.id == message.author.id));
     users[objIndex].predictMade += 1
     predicts.push(newPredict)
-    message.reply(`user has made new prediction`)
+    return `success: prediction made for matchid ${p[0]}. `
+
 }
+
+
 
 
 client.login(disctoken);
